@@ -2,9 +2,12 @@ const express = require('express')
 const mongoose =require("mongoose") ;
 const User = require("./models/UserModel.js")
 const jwt =require("jsonwebtoken");
+var cors = require('cors')
+
+
 
 const app = express()
-
+app.use(cors())
 app.use(express.urlencoded( {extended: true }) )
 app.use(express.json()) 
 
