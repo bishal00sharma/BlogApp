@@ -2,24 +2,62 @@ const express = require('express')
 const mongoose =require("mongoose") ;
 const User = require("./models/UserModel.js")
 const jwt =require("jsonwebtoken");
-var cors = require('cors')
+const nodemailer = require("nodemailer");
+var cors = require('cors');
+const OtpModel = require("./models/./otp.model");
+const otpGenerator = require('otp-generator');
+require("dotenv").config()
+
+
+
+const MAIN_KEY = process.env.MAIN_KEY
+const REFRESH_KEY = process.env.REFRESH_KEY
+
+const MAIN_EXP = process.env.MAIN_EXP
+const REFRESH_EXP = process.env.REFRESH_EXP
 
 
 
 const app = express()
 app.use(cors())
 app.use(express.urlencoded( {extended: true }) )
-app.use(express.json()) 
+app.use(express.json()) ;
 
+const transport = nodemailer.createTransport({
+    
+    host: "smtp.ethereal.email",
+    port: 587,
+    auth: {
+        user: "morris81@ethereal.email",
+        pass: "Pm35k11DDmNM9Mj1Mg"
+    },
+
+})
 
 app.get('/' ,(req,res) => res.send('Hello'))
 
 
+
+
+
+
 app.post("/signup", async(req,res) => {
     const { email,password, age} =req.body ;
-    await User.create(req.body);
-    console.log(email, password, age)
-    res.send("User created successfully")
+    const user=  await User.create(req.body);
+    console.log(email, password, age);
+
+    transport.sendMail({
+        to: email ,
+        from: "hello@facebook.com",
+        subject: "SignUp success",
+        text: `Hello ${email}, your account has been created successfully`
+    })
+    .then(() => {
+        console.log("Email sent successfully");
+        res.send("User created successfully")
+    })
+
+   
 })
 
 app.post("/login",async(req,res) =>{
@@ -32,11 +70,11 @@ app.post("/login",async(req,res) =>{
     
     const token = jwt.sign( 
         { id: user._id , email: user.email , age: user.age } ,
-        "SECRET1234",{
-            expiresIn: "70000 seconds" ,
+        MAIN_KEY,{
+            expiresIn: MAIN_EXP ,
         } //we have option to give expiry of token also
     );
-    const refreshtoken= jwt.sign( {id: user._id , email: user.email , age: user.age} , "REFRESHTOKEN1234") ;
+    const refreshtoken= jwt.sign( {id: user._id , email: user.email , age: user.age} , REFRESH_KEY ,{ expiresIn :REFRESH_EXP}) ;
     // we are generating the refresh token here
     res.send({message: "Login in succesfully" , token ,refreshtoken});
 
@@ -48,9 +86,9 @@ app.post("/refresh" ,async (req,res) => {
 
     try{
         // if the refresh token is valid, then generate the main token
-        const data =jwt.verify(refreshtoken , "REFRESHTOKEN1234");
+        const data =jwt.verify(refreshtoken , REFRESH_KEY);
         console.log(data)  //this will give data of that particular user
-        const maintoken = jwt.sign(data, "SECRET1234") ;
+        const maintoken = jwt.sign(data, MAIN_KEY) ;
         // this above line is for generating a new main token
         return res.send( { token: maintoken }) ;
     }
@@ -76,7 +114,7 @@ app.get("/user/:id", async (req,res) => {
     }
     // we have given try and catch becuase , let's say the token is wrong , then in that case our server will crash as there will be no else part, so for that we have catch part, so that if token in wrong , then in that case the response in the catch function will be send 
     try {
-        const verification =jwt.verify( token, "SECRET1234");
+        const verification =jwt.verify( token, MAIN_KEY);
         //console.log("verification", verification);
         const user = await User.findById(id) ;
         return res.send(user)
@@ -92,6 +130,46 @@ app.get("/github",(req,res)=>{
     console.log(req.query.code) ;
     res.send("You are successfully signed in. Now you can create Blog.")
 })
+
+
+app.post("/forget-password", async (req, res) => {
+    const { email } = req.body;
+    let otp = otpGenerator.generate(6, {
+      upperCaseAlphabets: false,
+      specialChars: false,
+    });
+  
+    transport
+      .sendMail({
+        to: email,
+        from: "bishal@gmail.com",
+        subject: "reset-password OTP",
+        text: `Your password reset request is successfull, OTP: ${otp}`,
+      })
+      .then(() => console.log("Email sent"));
+  
+     await OtpModel.create({ otp: otp, email: email });
+  
+    res.send(otp);
+  });
+  
+  app.post("/reset-password", async (req, res) => {
+    const { email, newPassword, otp } = req.body;
+    const testOtp = await OtpModel.findOne({ email, otp });
+    if (testOtp) {
+      const updatePass = await User.findOneAndUpdate(
+        { email },
+        { password: newPassword }
+      );
+      return res.send("Password updated");
+    } else {
+      return res.status(401).send("INVALID OTP");
+    }
+  });
+  
+
+
+
 
 mongoose.connect("mongodb://localhost:27017/nem201").then(() => {
     app.listen(8080 ,() => {
