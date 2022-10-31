@@ -1,6 +1,7 @@
 const express = require('express')
 const mongoose =require("mongoose") ;
-const User = require("./models/UserModel.js")
+const User = require("./models/UserModel.js");
+const BlogModel = require("./models/Blog.model")
 const jwt =require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 var cors = require('cors');
@@ -166,6 +167,20 @@ app.post("/forget-password", async (req, res) => {
       return res.status(401).send("INVALID OTP");
     }
   });
+
+  app.get("/blogs", async (req, res) => {
+    let data = await BlogModel.find({})
+    res.send(data)
+  })
+  
+  app.get("/blogs/:id", async (req, res) => {
+    // var title = req.params.title.replace("-", " ")
+    var id = req.params.id
+    let data = await BlogModel.findOne({_id: id})
+  
+    res.send(data)
+  })
+  
   
 
 
